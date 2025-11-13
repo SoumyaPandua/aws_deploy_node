@@ -1,0 +1,30 @@
+name: Deploy to EC2
+
+# Run on push to main branch
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Write SSH key to file
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Add EC2 host to known_hosts
+        # this avoids interactive "Are you sure?" prompt
+        run: |
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+        # ssh-keyscan is available on ubuntu runners by default
+
+      - name: Pull code and restart on EC2
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+          'cd /home/ec2-user/aws_deploy_node && git fetch --all && git reset --hard origin/main && npm ci && pm2 restart all || pm2 start npm -- start'
